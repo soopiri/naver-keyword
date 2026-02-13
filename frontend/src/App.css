@@ -1,0 +1,380 @@
+* {
+  margin: 0;
+  padding: 0;
+  box-sizing: border-box;
+}
+
+.app-container {
+  min-height: 100vh;
+  background-color: #1b2636;
+  color: #ffffff;
+  font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', 'Oxygen', 'Ubuntu', 'Cantarell', sans-serif;
+}
+
+.app-header {
+  background-color: #2a3441;
+  padding: 1rem 2rem;
+  border-bottom: 1px solid #3a4552;
+}
+
+.app-header h1 {
+  font-size: 1.5rem;
+  margin-bottom: 1rem;
+  color: #ffffff;
+}
+
+.app-nav {
+  display: flex;
+  gap: 0.5rem;
+}
+
+.app-nav button {
+  padding: 0.5rem 1rem;
+  background-color: #3a4552;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.app-nav button:hover {
+  background-color: #4a5562;
+}
+
+.app-nav button.active {
+  background-color: #10b981;
+}
+
+.app-main {
+  padding: 2rem;
+  max-width: 1200px;
+  margin: 0 auto;
+}
+
+.loading {
+  text-align: center;
+  padding: 2rem;
+  font-size: 1.2rem;
+}
+
+/* Settings Page */
+.settings-page {
+  background-color: #2a3441;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+.settings-page h2 {
+  margin-bottom: 2rem;
+  color: #ffffff;
+}
+
+.settings-section {
+  margin-bottom: 2rem;
+  padding: 1.5rem;
+  background-color: #1b2636;
+  border-radius: 6px;
+}
+
+.settings-section h3 {
+  margin-bottom: 1rem;
+  color: #10b981;
+  font-size: 1.1rem;
+}
+
+.form-group {
+  margin-bottom: 1rem;
+}
+
+.form-group label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #e5e7eb;
+  font-size: 0.9rem;
+}
+
+.form-group input {
+  width: 100%;
+  padding: 0.5rem;
+  background-color: #3a4552;
+  border: 1px solid #4a5562;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 0.9rem;
+}
+
+.form-group input:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.form-row {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(150px, 1fr));
+  gap: 1rem;
+}
+
+.test-button,
+.save-button {
+  padding: 0.75rem 1.5rem;
+  background-color: #10b981;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  margin-top: 1rem;
+  transition: background-color 0.2s;
+}
+
+.test-button:hover:not(:disabled),
+.save-button:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.test-button:disabled,
+.save-button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.test-result {
+  margin-top: 1rem;
+  padding: 1rem;
+  background-color: #1b2636;
+  border-radius: 4px;
+  white-space: pre-wrap;
+  font-size: 0.9rem;
+}
+
+/* Analyze Page */
+.analyze-page,
+.auto-extract-page,
+.creator-page {
+  background-color: #2a3441;
+  padding: 2rem;
+  border-radius: 8px;
+}
+
+.analyze-page h2,
+.auto-extract-page h2,
+.creator-page h2 {
+  margin-bottom: 2rem;
+  color: #ffffff;
+}
+
+.input-section {
+  margin-bottom: 2rem;
+}
+
+.input-section input {
+  width: 100%;
+  max-width: 500px;
+  padding: 0.75rem;
+  background-color: #3a4552;
+  border: 1px solid #4a5562;
+  border-radius: 4px;
+  color: #ffffff;
+  font-size: 1rem;
+  margin-bottom: 1rem;
+}
+
+.input-section input:focus {
+  outline: none;
+  border-color: #10b981;
+}
+
+.input-section button {
+  padding: 0.75rem 1.5rem;
+  background-color: #10b981;
+  color: #ffffff;
+  border: none;
+  border-radius: 4px;
+  cursor: pointer;
+  font-size: 1rem;
+  transition: background-color 0.2s;
+}
+
+.input-section button:hover:not(:disabled) {
+  background-color: #059669;
+}
+
+.input-section button:disabled {
+  opacity: 0.5;
+  cursor: not-allowed;
+}
+
+.seeds-input {
+  margin-bottom: 1rem;
+}
+
+.seeds-input label {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #e5e7eb;
+}
+
+.seed-input-row {
+  display: flex;
+  gap: 0.5rem;
+  margin-bottom: 0.5rem;
+}
+
+.seed-input-row input {
+  flex: 1;
+  margin-bottom: 0;
+}
+
+.add-button,
+.extract-button,
+.collect-button {
+  margin-top: 1rem;
+}
+
+/* Progress Section */
+.progress-section {
+  margin: 2rem 0;
+  padding: 1rem;
+  background-color: #1b2636;
+  border-radius: 4px;
+}
+
+.progress-bar {
+  width: 100%;
+  height: 24px;
+  background-color: #3a4552;
+  border-radius: 12px;
+  overflow: hidden;
+  margin-bottom: 0.5rem;
+}
+
+.progress-fill {
+  height: 100%;
+  background-color: #10b981;
+  transition: width 0.3s ease;
+}
+
+.progress-text {
+  color: #e5e7eb;
+  font-size: 0.9rem;
+}
+
+/* Result Section */
+.result-section {
+  margin-top: 2rem;
+}
+
+.result-section h3 {
+  margin-bottom: 1rem;
+  color: #10b981;
+}
+
+.result-card {
+  background-color: #1b2636;
+  padding: 1.5rem;
+  border-radius: 6px;
+  margin-bottom: 1rem;
+}
+
+.result-row {
+  margin-bottom: 0.75rem;
+  color: #e5e7eb;
+}
+
+.result-row strong {
+  color: #ffffff;
+  margin-right: 0.5rem;
+}
+
+.related-section,
+.trends-section,
+.main-inflow-section {
+  margin-top: 1.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid #3a4552;
+}
+
+.related-section h4,
+.trends-section h4,
+.main-inflow-section h4 {
+  margin-bottom: 1rem;
+  color: #10b981;
+}
+
+.trend-group {
+  margin-bottom: 1.5rem;
+}
+
+.trend-group h5 {
+  margin-bottom: 0.5rem;
+  color: #e5e7eb;
+}
+
+.content-item {
+  margin-bottom: 1rem;
+  padding: 1rem;
+  background-color: #2a3441;
+  border-radius: 4px;
+}
+
+.content-item strong {
+  display: block;
+  margin-bottom: 0.5rem;
+  color: #ffffff;
+}
+
+.content-item p {
+  color: #e5e7eb;
+  font-size: 0.9rem;
+}
+
+/* Table */
+.result-table {
+  width: 100%;
+  border-collapse: collapse;
+  margin-top: 1rem;
+}
+
+.result-table th {
+  background-color: #3a4552;
+  padding: 0.75rem;
+  text-align: left;
+  color: #ffffff;
+  font-weight: 600;
+  border-bottom: 2px solid #4a5562;
+}
+
+.result-table td {
+  padding: 0.75rem;
+  border-bottom: 1px solid #3a4552;
+  color: #e5e7eb;
+}
+
+.result-table tr:hover {
+  background-color: #2a3441;
+}
+
+.results-table-container {
+  overflow-x: auto;
+  margin-top: 1rem;
+}
+
+/* Error Message */
+.error-message {
+  padding: 1rem;
+  background-color: #7f1d1d;
+  color: #fca5a5;
+  border-radius: 4px;
+  margin: 1rem 0;
+}
+
+/* Links */
+a {
+  color: #60a5fa;
+  text-decoration: none;
+}
+
+a:hover {
+  text-decoration: underline;
+}
