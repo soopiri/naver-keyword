@@ -247,6 +247,28 @@
   font-weight: 600;
 }
 
+.demographic-gender-section {
+  margin-bottom: 24px;
+}
+
+.demographic-gender-section:last-child {
+  margin-bottom: 0;
+}
+
+.demographic-gender-title {
+  color: #344054;
+  margin: 0 0 12px;
+  font-size: 13px;
+  font-weight: 600;
+  padding-bottom: 8px;
+  border-bottom: 1px solid #e5e7eb;
+}
+
+:root.theme-dark .demographic-gender-title {
+  color: var(--ink);
+  border-bottom-color: #374151;
+}
+
 .trend-section {
   margin-top: 0;
 }

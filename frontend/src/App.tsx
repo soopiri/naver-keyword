@@ -63,9 +63,9 @@ function App() {
         <SettingsPage config={config} onSave={saveConfig} />
       )}
 
+      <SingleKeywordSearchPage />
       <GoldenKeywordSearchPage />
       <TrendDataSearchPage />
-      <SingleKeywordSearchPage />
     </div>
   );
 }
@@ -1159,41 +1159,113 @@ function TrendDataSearchPage() {
                           const normalizeSource = (source: string) =>
                             String(source || "").replace(/\s/g, "");
                           return normalizeSource(trend.source) === "성별,연령별인기유입검색어";
-                        }) && (
-                          <div className="trend-section-group">
-                            <h4 className="trend-section-title">성별, 연령별</h4>
-                            <div className="trend-cards">
-                              {result.searchInflowTrends
-                                .filter((trend: any) => {
-                                  const normalizeSource = (source: string) =>
-                                    String(source || "").replace(/\s/g, "");
-                                  return normalizeSource(trend.source) === "성별,연령별인기유입검색어";
-                                })
-                                .slice(0, 4)
-                                .map((trend: any, idx: number) => (
-                                  <div key={idx} className="trend-section demographic">
-                                    <div className="trend-card">
-                                      <h4>{trend.category}</h4>
-                                      <ul className="trend-list">
-                                        {trend.items?.map((item: any, itemIdx: number) => (
-                                          <li key={itemIdx}>
-                                            <span className="trend-keyword">
-                                              {item.keyword}
-                                            </span>
-                                            <span
-                                              className={`trend-change ${item.status === "up" ? "up" : item.status === "down" ? "down" : "new"}`}
-                                            >
-                                              {item.change}
-                                            </span>
-                                          </li>
-                                        ))}
-                                      </ul>
-                                    </div>
+                        }) && (() => {
+                          // 카테고리에서 연령 추출 및 정렬 순서 계산
+                          // 형식: "30-34세 여자", "60세- 남자" 등
+                          const getAgeSortValue = (category: string): number => {
+                            // "30-34세" 형식: 시작 연령과 끝 연령 추출
+                            const rangeMatch = category.match(/(\d+)-(\d+)세/);
+                            if (rangeMatch) {
+                              const startAge = parseInt(rangeMatch[1], 10);
+                              const endAge = parseInt(rangeMatch[2], 10);
+                              // 시작 연령 * 1000 + 끝 연령으로 정렬 (예: 30-34 -> 30034, 30-35 -> 30035)
+                              return startAge * 1000 + endAge;
+                            }
+                            
+                            // "60세-" 형식: 시작 연령만 추출
+                            const singleMatch = category.match(/(\d+)세-/);
+                            if (singleMatch) {
+                              const startAge = parseInt(singleMatch[1], 10);
+                              // 시작 연령 * 1000 + 큰 수로 정렬 (범위가 없는 경우 맨 뒤로)
+                              return startAge * 1000 + 999;
+                            }
+                            
+                            // 매칭되지 않으면 맨 뒤로
+                            return 999999;
+                          };
+
+                          // 성별, 연령별 데이터 필터링
+                          const demographicTrends = result.searchInflowTrends.filter((trend: any) => {
+                            const normalizeSource = (source: string) =>
+                              String(source || "").replace(/\s/g, "");
+                            return normalizeSource(trend.source) === "성별,연령별인기유입검색어";
+                          });
+
+                          // 남자/여자로 분리 및 정렬
+                          const maleTrends = demographicTrends
+                            .filter((trend: any) => trend.category.includes("남자"))
+                            .sort((a: any, b: any) => getAgeSortValue(a.category) - getAgeSortValue(b.category));
+
+                          const femaleTrends = demographicTrends
+                            .filter((trend: any) => trend.category.includes("여자"))
+                            .sort((a: any, b: any) => getAgeSortValue(a.category) - getAgeSortValue(b.category));
+
+                          return (
+                            <div className="trend-section-group">
+                              <h4 className="trend-section-title">성별, 연령별</h4>
+                              
+                              {/* 여자 섹션 */}
+                              {femaleTrends.length > 0 && (
+                                <div className="demographic-gender-section">
+                                  <h5 className="demographic-gender-title">여자</h5>
+                                  <div className="trend-cards">
+                                    {femaleTrends.map((trend: any, idx: number) => (
+                                      <div key={`female-${idx}`} className="trend-section demographic">
+                                        <div className="trend-card">
+                                          <h4>{trend.category}</h4>
+                                          <ul className="trend-list">
+                                            {trend.items?.map((item: any, itemIdx: number) => (
+                                              <li key={itemIdx}>
+                                                <span className="trend-keyword">
+                                                  {item.keyword}
+                                                </span>
+                                                <span
+                                                  className={`trend-change ${item.status === "up" ? "up" : item.status === "down" ? "down" : "new"}`}
+                                                >
+                                                  {item.change}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    ))}
                                   </div>
-                                ))}
+                                </div>
+                              )}
+
+                              {/* 남자 섹션 */}
+                              {maleTrends.length > 0 && (
+                                <div className="demographic-gender-section">
+                                  <h5 className="demographic-gender-title">남자</h5>
+                                  <div className="trend-cards">
+                                    {maleTrends.map((trend: any, idx: number) => (
+                                      <div key={`male-${idx}`} className="trend-section demographic">
+                                        <div className="trend-card">
+                                          <h4>{trend.category}</h4>
+                                          <ul className="trend-list">
+                                            {trend.items?.map((item: any, itemIdx: number) => (
+                                              <li key={itemIdx}>
+                                                <span className="trend-keyword">
+                                                  {item.keyword}
+                                                </span>
+                                                <span
+                                                  className={`trend-change ${item.status === "up" ? "up" : item.status === "down" ? "down" : "new"}`}
+                                                >
+                                                  {item.change}
+                                                </span>
+                                              </li>
+                                            ))}
+                                          </ul>
+                                        </div>
+                                      </div>
+                                    ))}
+                                  </div>
+                                </div>
+                              )}
                             </div>
-                          </div>
-                        )}
+                          );
+                        })()}
                       </>
                     )}
                   {result.searchInflowTrends &&

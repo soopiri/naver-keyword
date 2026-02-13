@@ -496,8 +496,8 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 		})
 	}
 
-	log.Printf("[collectSearchInflowTrends] Calling collectTrendSwiper for demographic trends: maxCategories=4, swiperIndex=%d", demoSwiperIndex)
-	demoResults, err := collectTrendSwiper(page, "성별,연령별 인기유입검색어", 4, demoSwiperIndex, false)
+	log.Printf("[collectSearchInflowTrends] Calling collectTrendSwiper for demographic trends: maxCategories=0 (collect all), swiperIndex=%d", demoSwiperIndex)
+	demoResults, err := collectTrendSwiper(page, "성별,연령별 인기유입검색어", 0, demoSwiperIndex, false)
 	if err != nil {
 		log.Printf("[collectSearchInflowTrends] Error collecting demographic trends: %v", err)
 	} else {
@@ -512,7 +512,7 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 	log.Printf("[collectSearchInflowTrends] Combined results: topic=%d, demographic=%d, total=%d", 
 		len(topicResults), len(demoResults), len(allResults))
 
-	// Filter demographic results (max 4)
+	// No filtering - include all demographic results
 	filteredResults := []SearchInflowTrend{}
 	demoCount := 0
 	for _, group := range allResults {
@@ -521,10 +521,6 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 			demoCount++
 			log.Printf("[collectSearchInflowTrends] Demographic group[%d]: category='%s', items=%d", 
 				demoCount, group.Category, len(group.Items))
-			if demoCount > 4 {
-				log.Printf("[collectSearchInflowTrends] Skipping demographic group (exceeds max 4): category='%s'", group.Category)
-				continue
-			}
 		}
 		filteredResults = append(filteredResults, group)
 	}
