@@ -2,12 +2,12 @@
   "$schema": "https://wails.io/schemas/config.v2.json",
   "name": "pick-keyword",
   "outputfilename": "pick-keyword",
-  "frontend:install": "npm install",
-  "frontend:build": "npm run build",
-  "frontend:dev:watcher": "npm run dev",
+  "frontend:install": "pnpm install",
+  "frontend:build": "pnpm run build",
+  "frontend:dev:watcher": "pnpm run dev",
   "frontend:dev:serverUrl": "auto",
   "author": {
-    "name": "SooyoonJi",
-    "email": "sooyoon.ji@vuno.co"
+    "name": "soopiri",
+    "email": "8xd.jang@gmail.com"
   }
 }
