@@ -13,8 +13,7 @@ Electron 앱을 Wails로 포팅한 키워드 분석 도구입니다.
 ✅ 스코어링 로직
 ✅ 이벤트 시스템 (진행 상황 전달)
 ✅ 로그 관리
-
-⚠️ Playwright 자동화 기능은 아직 구현되지 않았습니다 (creator.go 참조)
+✅ Playwright 자동화 기능 (크리에이터 어드바이저 데이터 수집)
 
 ## 설치 및 실행
 
@@ -98,7 +97,7 @@ const unsubscribe = api.onKeywordProgress((progress) => {
 
 ## 주의사항
 
-1. **Playwright 기능**: 현재 Playwright 자동화 기능은 구현되지 않았습니다. `creator.go`를 구현해야 합니다.
+1. **Playwright 기능**: Playwright 자동화 기능이 구현되어 있습니다. 사용하려면 브라우저를 설치해야 합니다 (위의 "Playwright 자동화 기능" 섹션 참조).
 
 2. **남은시간 계산**: 요청하신 대로 남은시간 계산 기능은 제외되었습니다.
 
@@ -131,7 +130,3 @@ wails dev
 go mod tidy
 go mod download
 ```
-
-## 라이센스
-
-원본 Electron 앱의 라이센스를 따릅니다.
