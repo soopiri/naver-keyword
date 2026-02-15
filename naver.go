@@ -136,7 +136,7 @@ func fetchWithTimeout(client *http.Client, req *http.Request, timeoutMs int) (*h
 	return client.Do(req)
 }
 
-func fetchNaverAutocomplete(keyword string, limit int) ([]string, error) {
+func fetchNaverAutocomplete(keyword string, limit int, featureName string) ([]string, error) {
 	keyword = strings.TrimSpace(keyword)
 	if keyword == "" {
 		return []string{}, nil
@@ -158,21 +158,28 @@ func fetchNaverAutocomplete(keyword string, limit int) ([]string, error) {
 	client := &http.Client{Timeout: time.Duration(fetchTimeoutMs) * time.Millisecond}
 	resp, err := fetchWithTimeout(client, req, fetchTimeoutMs)
 	if err != nil {
+		log.Printf("[%s] [Naver 자동완성 API] 호출 실패\nURL: %s\n파라미터: q=%s, r_format=json, st=0\n에러: %v\n", featureName, reqURL, keyword, err)
 		return nil, err
 	}
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
 		body, _ := io.ReadAll(resp.Body)
+		log.Printf("[%s] [Naver 자동완성 API] HTTP 오류\nURL: %s\n파라미터: q=%s, r_format=json, st=0\n상태코드: %d\n응답: %s\n", featureName, reqURL, keyword, resp.StatusCode, string(body))
 		return nil, fmt.Errorf("autocomplete error: %d %s", resp.StatusCode, string(body))
 	}
 
 	var data struct {
 		Items [][]interface{} `json:"items"`
 	}
-	if err := json.NewDecoder(resp.Body).Decode(&data); err != nil {
+	body, _ := io.ReadAll(resp.Body)
+	if err := json.Unmarshal(body, &data); err != nil {
+		log.Printf("[%s] [Naver 자동완성 API] JSON 파싱 실패\nURL: %s\n파라미터: q=%s, r_format=json, st=0\n에러: %v\n응답: %s\n", featureName, reqURL, keyword, err, string(body))
 		return nil, err
 	}
+
+	responseJSON, _ := json.MarshalIndent(data, "", "  ")
+	log.Printf("[%s] [Naver 자동완성 API]\nURL: %s\n파라미터: q=%s, r_format=json, st=0\n응답: %s\n", featureName, reqURL, keyword, string(responseJSON))
 
 	var suggestions []string
 	if len(data.Items) > 0 && len(data.Items[0]) > 0 {
@@ -192,7 +199,7 @@ func fetchNaverAutocomplete(keyword string, limit int) ([]string, error) {
 	return unique, nil
 }
 
-func fetchBlogCount(config Config, keyword string) (map[string]int, error) {
+func fetchBlogCount(config Config, keyword string, featureName string) (map[string]int, error) {
 	if config.Naver.ClientID == "" || config.Naver.ClientSecret == "" {
 		return map[string]int{"total": 0}, nil
 	}
@@ -251,17 +258,16 @@ func fetchBlogCount(config Config, keyword string) (map[string]int, error) {
 		body, _ := io.ReadAll(resp.Body)
 		resp.Body.Close()
 
-		// 네이버 검색 API 원본 응답 로그 출력
-		log.Printf("=== Naver Search API 원본 응답 ===\nKeyword: %s\nResponse Body: %s\n", keyword, string(body))
-
 		var data struct {
 			Total int `json:"total"`
 		}
 		if err := json.Unmarshal(body, &data); err != nil {
+			log.Printf("[%s] [Naver 블로그 검색 API] JSON 파싱 실패\nURL: %s\n파라미터: query=%s, display=1\n에러: %v\n응답: %s\n", featureName, reqURL, keyword, err, string(body))
 			return nil, err
 		}
 
-		log.Printf("=== Naver Search API 파싱 결과 ===\nKeyword: %s\nTotal: %d\n", keyword, data.Total)
+		responseJSON, _ := json.MarshalIndent(data, "", "  ")
+		log.Printf("[%s] [Naver 블로그 검색 API]\nURL: %s\n파라미터: query=%s, display=1\n응답: %s\n", featureName, reqURL, keyword, string(responseJSON))
 
 		return map[string]int{"total": data.Total}, nil
 	}
@@ -297,6 +303,7 @@ func testNaverSearch(config Config) *TestResult {
 	client := &http.Client{Timeout: time.Duration(fetchTimeoutMs) * time.Millisecond}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("[Naver API 테스트] 호출 실패\nURL: %s\n파라미터: query=test, display=1\n에러: %v\n", reqURL, err)
 		return &TestResult{
 			OK:      false,
 			Status:  500,
@@ -306,6 +313,11 @@ func testNaverSearch(config Config) *TestResult {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	responseJSON, _ := json.MarshalIndent(map[string]interface{}{
+		"statusCode": resp.StatusCode,
+		"body":       string(body),
+	}, "", "  ")
+	log.Printf("[Naver API 테스트]\nURL: %s\n파라미터: query=test, display=1\n응답: %s\n", reqURL, string(responseJSON))
 	return &TestResult{
 		OK:      resp.StatusCode == http.StatusOK,
 		Status:  resp.StatusCode,

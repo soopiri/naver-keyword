@@ -169,7 +169,7 @@ func getSearchAdMonthlyMetrics(item SearchAdKeywordItem, searchPc, searchMobile 
 	return result
 }
 
-func fetchSearchAdKeywords(config Config, keywords []string) ([]SearchAdKeywordItem, error) {
+func fetchSearchAdKeywords(config Config, keywords []string, featureName string) ([]SearchAdKeywordItem, error) {
 	baseURL := config.SearchAd.BaseURL
 	if baseURL == "" {
 		baseURL = "https://api.searchad.naver.com"
@@ -290,7 +290,6 @@ func fetchSearchAdKeywords(config Config, keywords []string) ([]SearchAdKeywordI
 			}
 
 			if resp.StatusCode == 429 {
-				logLine("searchad.log", fmt.Sprintf("status=%d url=%s query=%s body=%s", resp.StatusCode, reqURL, encodedQuery, string(body)))
 				if attempt < searchAdRetryMax {
 					time.Sleep(time.Duration(searchAdRetryBaseMs*(1<<attempt)) * time.Millisecond)
 					continue
@@ -299,7 +298,6 @@ func fetchSearchAdKeywords(config Config, keywords []string) ([]SearchAdKeywordI
 
 			lastResp = resp
 			lastBody = body
-			logLine("searchad.log", fmt.Sprintf("status=%d url=%s query=%s body=%s", resp.StatusCode, reqURL, encodedQuery, string(body)))
 		}
 
 		if lastResp != nil {
@@ -310,54 +308,38 @@ func fetchSearchAdKeywords(config Config, keywords []string) ([]SearchAdKeywordI
 
 	for _, keywordSet := range keywordSets {
 		queryVariants := buildSearchAdQueries(keywordSet)
-		log.Printf("=== fetchSearchAdKeywords: keywordSet 처리 시작 ===\nKeywords: %v\nkeywordSet: %v\nqueryVariants 개수: %d\n", keywords, keywordSet, len(queryVariants))
-		for idx, encodedQuery := range queryVariants {
-			log.Printf("=== fetchSearchAdKeywords: API 호출 시도[%d] ===\nKeywords: %v\nencodedQuery: %s\n", idx, keywords, encodedQuery)
+		for _, encodedQuery := range queryVariants {
+			reqURL := fmt.Sprintf("%s%s?%s", baseURL, apiPath, encodedQuery)
 			resp, body, err := requestWithRetry(encodedQuery)
 			if err != nil {
-				log.Printf("=== fetchSearchAdKeywords: requestWithRetry 실패 ===\nKeywords: %v\nError: %v\n", keywords, err)
+				log.Printf("[%s] [SearchAd API] 호출 실패\nURL: %s\n파라미터: %s\n에러: %v\n", featureName, reqURL, encodedQuery, err)
 				continue
 			}
 			if resp == nil {
-				log.Printf("=== fetchSearchAdKeywords: resp가 nil ===\nKeywords: %v\n", keywords)
 				continue
 			}
 
-			log.Printf("=== fetchSearchAdKeywords: 응답 받음 ===\nKeywords: %v\nStatusCode: %d\n", keywords, resp.StatusCode)
-
 			if resp.StatusCode == http.StatusOK {
-				// body는 이미 requestWithRetry에서 읽었음
 				if body == nil {
-					log.Printf("=== fetchSearchAdKeywords: body가 nil ===\nKeywords: %v\n", keywords)
 					continue
 				}
-
-				// API 응답 원본 로그 출력
-				log.Printf("=== SearchAd API 원본 응답 ===\nKeywords: %v\nResponse Body: %s\n", keywords, string(body))
 
 				var data struct {
 					KeywordList []SearchAdKeywordItem `json:"keywordList"`
 				}
 				if err := json.Unmarshal(body, &data); err != nil {
-					log.Printf("=== fetchSearchAdKeywords: JSON 파싱 실패 ===\nKeywords: %v\nError: %v\nBody: %s\n", keywords, err, string(body))
+					log.Printf("[%s] [SearchAd API] JSON 파싱 실패\nURL: %s\n파라미터: %s\n에러: %v\n응답: %s\n", featureName, reqURL, encodedQuery, err, string(body))
 					continue
 				}
 
-				// 파싱된 데이터 로그 출력 (특히 competition 필드)
-				for i, item := range data.KeywordList {
-					log.Printf("=== SearchAd Item[%d] ===\nKeyword: %s\nRelKeyword: %s\nCompIdx: %v\nCompetitionIdx: %v\nCompetitionIndex: %v\nCompetition: %v\nComp: %v\n",
-						i, item.Keyword, item.RelKeyword, item.CompIdx, item.CompetitionIdx, item.CompetitionIndex, item.Competition, item.Comp)
-				}
-
-				log.Printf("=== fetchSearchAdKeywords: 성공적으로 반환 ===\nKeywords: %v\n결과 개수: %d\n", keywords, len(data.KeywordList))
+				responseJSON, _ := json.MarshalIndent(data, "", "  ")
+				log.Printf("[%s] [SearchAd API]\nURL: %s\n파라미터: %s\n응답: %s\n", featureName, reqURL, encodedQuery, string(responseJSON))
 				return data.KeywordList, nil
 			} else {
-				log.Printf("=== fetchSearchAdKeywords: HTTP 상태 코드 오류 ===\nKeywords: %v\nStatusCode: %d\nResponse Body: %s\n", keywords, resp.StatusCode, string(body))
+				log.Printf("[%s] [SearchAd API] HTTP 오류\nURL: %s\n파라미터: %s\n상태코드: %d\n응답: %s\n", featureName, reqURL, encodedQuery, resp.StatusCode, string(body))
 			}
 		}
 	}
-
-	log.Printf("=== fetchSearchAdKeywords: 모든 시도 실패, 빈 배열 반환 ===\nKeywords: %v\n", keywords)
 	return []SearchAdKeywordItem{}, nil
 }
 
@@ -413,6 +395,7 @@ func testSearchAd(config Config) *TestResult {
 	client := &http.Client{Timeout: time.Duration(fetchTimeoutMs) * time.Millisecond}
 	resp, err := client.Do(req)
 	if err != nil {
+		log.Printf("[SearchAd API 테스트] 호출 실패\nURL: %s\n파라미터: %s\n에러: %v\n", reqURL, encodedQuery, err)
 		return &TestResult{
 			OK:      false,
 			Status:  500,
@@ -422,6 +405,11 @@ func testSearchAd(config Config) *TestResult {
 	defer resp.Body.Close()
 
 	body, _ := io.ReadAll(resp.Body)
+	responseJSON, _ := json.MarshalIndent(map[string]interface{}{
+		"statusCode": resp.StatusCode,
+		"body":       string(body),
+	}, "", "  ")
+	log.Printf("[SearchAd API 테스트]\nURL: %s\n파라미터: %s\n응답: %s\n", reqURL, encodedQuery, string(responseJSON))
 
 	if resp.StatusCode == 403 && strings.Contains(string(body), "invalid-signature") {
 		signature = createSignatureWithQuery(method, apiPath, timestamp, secretKey, encodedQuery)
@@ -656,7 +644,6 @@ func fetchSearchAdList(config Config, apiPath string, query map[string]string) (
 			}
 			if resp.StatusCode == 429 && attempt < 3 {
 				resp.Body.Close()
-				logLine("searchad.log", fmt.Sprintf("status=%d url=%s", resp.StatusCode, url))
 				time.Sleep(time.Duration(600*(1<<attempt)) * time.Millisecond)
 				continue
 			}
@@ -709,7 +696,6 @@ func fetchSearchAdNccKeywords(config Config) ([]map[string]interface{}, error) {
 	if err != nil {
 		return []map[string]interface{}{}, err
 	}
-	logSearchAdCpc(fmt.Sprintf("ncc campaigns loaded count=%d", len(campaigns)))
 
 	adgroups := []map[string]interface{}{}
 	for _, campaign := range campaigns {
@@ -727,7 +713,6 @@ func fetchSearchAdNccKeywords(config Config) ([]map[string]interface{}, error) {
 			adgroups = append(adgroups, groups...)
 		}
 	}
-	logSearchAdCpc(fmt.Sprintf("ncc adgroups loaded count=%d", len(adgroups)))
 
 	keywords := []map[string]interface{}{}
 	for _, adgroup := range adgroups {
@@ -745,14 +730,13 @@ func fetchSearchAdNccKeywords(config Config) ([]map[string]interface{}, error) {
 			keywords = append(keywords, groupKeywords...)
 		}
 	}
-	logSearchAdCpc(fmt.Sprintf("ncc keywords loaded count=%d", len(keywords)))
 
 	cachedSearchAdNccKeywords = keywords
 	cachedSearchAdNccKeywordsAt = now
 	return keywords, nil
 }
 
-func fetchSearchAdStats(config Config, ids []string) ([]map[string]interface{}, error) {
+func fetchSearchAdStats(config Config, ids []string, featureName string) ([]map[string]interface{}, error) {
 	normalizedBase := strings.TrimSuffix(config.SearchAd.BaseURL, "/")
 	if normalizedBase == "" {
 		normalizedBase = "https://api.searchad.naver.com"
@@ -779,17 +763,15 @@ func fetchSearchAdStats(config Config, ids []string) ([]map[string]interface{}, 
 
 	apiPath := "/stats"
 	params := []string{
-		fmt.Sprintf("ids=%s", strings.Join(cleanedIDs, ",")),
-		fmt.Sprintf(`fields=["clkCnt","salesAmt"]`),
-		fmt.Sprintf("datePreset=%s", searchAdStatsDatePreset),
-		fmt.Sprintf("breakdown=%s", searchAdStatsBreakdown),
+		"ids=" + strings.Join(cleanedIDs, ","),
+		`fields=["clkCnt","salesAmt"]`,
+		"datePreset=" + searchAdStatsDatePreset,
+		"breakdown=" + searchAdStatsBreakdown,
 	}
 	queryString := strings.Join(params, "&")
 	url := normalizedBase + apiPath + "?" + queryString
 	timestamp := fmt.Sprintf("%d", time.Now().UnixMilli())
 	method := "GET"
-
-	logSearchAdCpc(fmt.Sprintf("stats request start ids=%d datePreset=%s breakdown=%s", len(cleanedIDs), searchAdStatsDatePreset, searchAdStatsBreakdown))
 
 	requestFunc := func(signature string) (*http.Response, error) {
 		waitForSearchAdRateLimit()
@@ -840,23 +822,23 @@ func fetchSearchAdStats(config Config, ids []string) ([]map[string]interface{}, 
 				resp.Body.Close()
 				var data interface{}
 				if err := json.Unmarshal(body, &data); err != nil {
+					log.Printf("[%s] [SearchAd CPC 통계 API] JSON 파싱 실패\nURL: %s\n파라미터: ids=%v, fields=[\"clkCnt\",\"salesAmt\"], datePreset=%s, breakdown=%s\n에러: %v\n응답: %s\n", featureName, url, cleanedIDs, searchAdStatsDatePreset, searchAdStatsBreakdown, err, string(body))
 					return []map[string]interface{}{}, nil
 				}
 				rows := normalizeStatsRows(data)
-				logSearchAdCpc(fmt.Sprintf("stats response ok rows=%d", len(rows)))
+				responseJSON, _ := json.MarshalIndent(data, "", "  ")
+				log.Printf("[%s] [SearchAd CPC 통계 API]\nURL: %s\n파라미터: ids=%v, fields=[\"clkCnt\",\"salesAmt\"], datePreset=%s, breakdown=%s\n응답: %s\n", featureName, url, cleanedIDs, searchAdStatsDatePreset, searchAdStatsBreakdown, string(responseJSON))
 				return rows, nil
 			}
 			if resp.StatusCode == 429 && attempt < 3 {
-				body, _ := io.ReadAll(resp.Body)
+				io.ReadAll(resp.Body)
 				resp.Body.Close()
-				logLine("searchad.log", fmt.Sprintf("status=%d url=%s body=%s", resp.StatusCode, url, string(body)))
 				time.Sleep(time.Duration(600*(1<<attempt)) * time.Millisecond)
 				continue
 			}
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			logLine("searchad.log", fmt.Sprintf("status=%d url=%s body=%s", resp.StatusCode, url, string(body)))
-			logSearchAdCpc(fmt.Sprintf("stats request failed status=%d", resp.StatusCode))
+			log.Printf("[%s] [SearchAd CPC 통계 API] HTTP 오류\nURL: %s\n파라미터: ids=%v, fields=[\"clkCnt\",\"salesAmt\"], datePreset=%s, breakdown=%s\n상태코드: %d\n응답: %s\n", featureName, url, cleanedIDs, searchAdStatsDatePreset, searchAdStatsBreakdown, resp.StatusCode, string(body))
 		}
 		return []map[string]interface{}{}, nil
 	}
@@ -864,7 +846,7 @@ func fetchSearchAdStats(config Config, ids []string) ([]map[string]interface{}, 
 	return requestWithRetry()
 }
 
-func fetchSearchAdKeywordStats(config Config, keywords []string) (map[string]KeywordStats, error) {
+func fetchSearchAdKeywordStats(config Config, keywords []string, featureName string) (map[string]KeywordStats, error) {
 	cleaned := []string{}
 	seen := make(map[string]bool)
 	for _, kw := range keywords {
@@ -882,7 +864,6 @@ func fetchSearchAdKeywordStats(config Config, keywords []string) (map[string]Key
 	if err != nil {
 		return make(map[string]KeywordStats), err
 	}
-	logSearchAdCpc(fmt.Sprintf("ncc keywords loaded count=%d", len(nccKeywords)))
 
 	keywordIDMap := buildKeywordIdMap(nccKeywords)
 	idToKeyword := make(map[string]string)
@@ -899,7 +880,7 @@ func fetchSearchAdKeywordStats(config Config, keywords []string) (map[string]Key
 
 	statsMap := make(map[string]KeywordStats)
 	for _, id := range ids {
-		rows, err := fetchSearchAdStats(config, []string{id})
+		rows, err := fetchSearchAdStats(config, []string{id}, featureName)
 		if err != nil || len(rows) == 0 {
 			continue
 		}
@@ -935,7 +916,7 @@ func fetchSearchAdKeywordStats(config Config, keywords []string) (map[string]Key
 	return statsMap, nil
 }
 
-func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, device string, bidMap map[string]float64) (map[string]CpcEstimate, error) {
+func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, device string, bidMap map[string]float64, featureName string) (map[string]CpcEstimate, error) {
 	normalizedBase := strings.TrimSuffix(config.SearchAd.BaseURL, "/")
 	if normalizedBase == "" {
 		normalizedBase = "https://api.searchad.naver.com"
@@ -946,7 +927,6 @@ func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, de
 		SecretKey:  strings.TrimSpace(config.SearchAd.SecretKey),
 	}
 	if trimmed.CustomerID == "" || trimmed.AccessKey == "" || trimmed.SecretKey == "" {
-		logSearchAdCpc("credentials missing")
 		return make(map[string]CpcEstimate), nil
 	}
 
@@ -960,7 +940,6 @@ func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, de
 		}
 	}
 	if len(cleaned) == 0 {
-		logSearchAdCpc("no keywords")
 		return make(map[string]CpcEstimate), nil
 	}
 
@@ -1000,8 +979,6 @@ func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, de
 	timestamp := fmt.Sprintf("%d", time.Now().UnixMilli())
 	method := "POST"
 
-	logSearchAdCpc(fmt.Sprintf("request start path=%s device=%s bid=%.0f count=%d", apiPath, device, bid, len(items)))
-
 	requestFunc := func(signature string) (*http.Response, error) {
 		waitForSearchAdRateLimit()
 		req, err := http.NewRequest(method, url, strings.NewReader(string(payloadJSON)))
@@ -1034,11 +1011,11 @@ func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, de
 				resp.Body.Close()
 				var data map[string]interface{}
 				if err := json.Unmarshal(body, &data); err != nil {
+					log.Printf("[%s] [SearchAd CPC 추정 API] JSON 파싱 실패\nURL: %s\n파라미터: device=%s, bid=%.0f, keywords=%v\n에러: %v\n응답: %s\n", featureName, url, device, bid, keywords, err, string(body))
 					return make(map[string]CpcEstimate), nil
 				}
 				result := make(map[string]CpcEstimate)
 				if items, ok := data["items"].([]interface{}); ok {
-					logSearchAdCpc(fmt.Sprintf("response items=%d device=%s bid=%.0f", len(items), device, bid))
 					for _, item := range items {
 						if m, ok := item.(map[string]interface{}); ok {
 							keyword := getString(m, "keyword")
@@ -1052,24 +1029,20 @@ func fetchSearchAdCpcEstimates(config Config, keywords []string, bid float64, de
 							}
 						}
 					}
-				} else {
-					logLine("searchad.log", fmt.Sprintf("status=200 url=%s path=%s device=%s bid=%.0f items=0", url, apiPath, device, bid))
-					logSearchAdCpc(fmt.Sprintf("response items=0 device=%s bid=%.0f", device, bid))
 				}
-				logSearchAdCpc(fmt.Sprintf("response ok status=%d device=%s bid=%.0f", resp.StatusCode, device, bid))
+				responseJSON, _ := json.MarshalIndent(data, "", "  ")
+				log.Printf("[%s] [SearchAd CPC 추정 API]\nURL: %s\n파라미터: device=%s, bid=%.0f, keywords=%v\n응답: %s\n", featureName, url, device, bid, keywords, string(responseJSON))
 				return result, nil
 			}
 			if resp.StatusCode == 429 && attempt < 3 {
-				body, _ := io.ReadAll(resp.Body)
+				io.ReadAll(resp.Body)
 				resp.Body.Close()
-				logLine("searchad.log", fmt.Sprintf("status=%d url=%s body=%s", resp.StatusCode, url, string(body)))
 				time.Sleep(time.Duration(600*(1<<attempt)) * time.Millisecond)
 				continue
 			}
 			body, _ := io.ReadAll(resp.Body)
 			resp.Body.Close()
-			logLine("searchad.log", fmt.Sprintf("status=%d url=%s path=%s device=%s bid=%.0f body=%s", resp.StatusCode, url, apiPath, device, bid, string(body)))
-			logSearchAdCpc(fmt.Sprintf("request failed status=%d device=%s bid=%.0f", resp.StatusCode, device, bid))
+			log.Printf("[%s] [SearchAd CPC 추정 API] HTTP 오류\nURL: %s\n파라미터: device=%s, bid=%.0f, keywords=%v\n상태코드: %d\n응답: %s\n", featureName, url, device, bid, keywords, resp.StatusCode, string(body))
 		}
 		return make(map[string]CpcEstimate), nil
 	}

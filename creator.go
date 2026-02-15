@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/url"
@@ -70,6 +71,7 @@ func collectCreatorAdvisor(payload CreatorAdvisorPayload, onProgress func(Progre
 	if err := safeGoto(page, "https://nid.naver.com/nidlogin.login"); err != nil {
 		return nil, fmt.Errorf("로그인 페이지 접속 실패: %w", err)
 	}
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: https://nid.naver.com/nidlogin.login\n액션: 네이버 로그인 페이지 접속\n")
 
 	if err := page.Fill("#id", loginID); err != nil {
 		return nil, fmt.Errorf("ID 입력 실패: %w", err)
@@ -131,6 +133,7 @@ loginSuccess:
 	if err := safeGoto(page, "https://section.blog.naver.com/BlogHome.naver?directoryNo=0&currentPage=1&groupId=0"); err != nil {
 		return nil, fmt.Errorf("블로그 홈 접속 실패: %w", err)
 	}
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: https://section.blog.naver.com/BlogHome.naver\n액션: 블로그 홈 접속\n")
 
 	// Step 3: 내 블로그 접속
 	if onProgress != nil {
@@ -149,6 +152,7 @@ loginSuccess:
 	if err := safeGoto(myBlogPage, "https://blog.naver.com/MyBlog.naver"); err != nil {
 		return nil, fmt.Errorf("내 블로그 접속 실패: %w", err)
 	}
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: https://blog.naver.com/MyBlog.naver\n액션: 내 블로그 접속\n")
 
 	currentURL = myBlogPage.URL()
 	blogID := extractBlogIdFromURL(currentURL)
@@ -163,9 +167,11 @@ loginSuccess:
 	}
 
 	if blogID != "" {
-		if err := safeGoto(myBlogPage, fmt.Sprintf("https://admin.blog.naver.com/%s/stat/today", blogID)); err != nil {
+		statsURL := fmt.Sprintf("https://admin.blog.naver.com/%s/stat/today", blogID)
+		if err := safeGoto(myBlogPage, statsURL); err != nil {
 			return nil, fmt.Errorf("통계 페이지 접속 실패: %w", err)
 		}
+		log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 통계 페이지 접속\n", statsURL)
 	} else {
 		statsLink := myBlogPage.Locator(`a[href*="/stat/today"]`).First()
 		count, _ := statsLink.Count()
@@ -199,9 +205,11 @@ loginSuccess:
 
 	advisorPage := myBlogPage
 	if blogID != "" {
-		if err := safeGoto(advisorPage, fmt.Sprintf("https://creator-advisor.naver.com/naver_blog/%s/trends", blogID)); err != nil {
+		advisorURL := fmt.Sprintf("https://creator-advisor.naver.com/naver_blog/%s/trends", blogID)
+		if err := safeGoto(advisorPage, advisorURL); err != nil {
 			return nil, fmt.Errorf("크리에이터 어드바이저 접속 실패: %w", err)
 		}
+		log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 크리에이터 어드바이저 접속\n", advisorURL)
 	} else {
 		var err error
 		advisorPage, err = clickMaybePopup(myBlogPage, `a[href*="creator-advisor.naver.com/naver_blog/"]`)
@@ -247,10 +255,18 @@ loginSuccess:
 	if err != nil {
 		return nil, fmt.Errorf("검색 유입 트렌드 수집 실패: %w", err)
 	}
+	if searchInflowPayload != nil {
+		searchInflowJSON, _ := json.MarshalIndent(searchInflowPayload, "", "  ")
+		log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 검색 유입 트렌드 수집\n수집 데이터: %s\n", advisorPage.URL(), string(searchInflowJSON))
+	}
 
 	mainInflowContents, err := collectMainInflow(advisorPage)
 	if err != nil {
 		return nil, fmt.Errorf("메인 유입 콘텐츠 수집 실패: %w", err)
+	}
+	if mainInflowContents != nil {
+		mainInflowJSON, _ := json.MarshalIndent(mainInflowContents, "", "  ")
+		log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 메인 유입 콘텐츠 수집\n수집 데이터: %s\n", advisorPage.URL(), string(mainInflowJSON))
 	}
 
 	if onProgress != nil {
@@ -386,9 +402,11 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 	Message string              `json:"message"`
 	NoData  bool                `json:"noData"`
 }, error) {
+	currentURL := page.URL()
 	if err := clickTrendTab(page, "검색 유입 트렌드"); err != nil {
 		return nil, fmt.Errorf("검색 유입 트렌드 탭 클릭 실패: %w", err)
 	}
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 검색 유입 트렌드 탭 클릭\n", currentURL)
 
 	// Collect topic trends
 	topicClicked, err := clickTrendMenu(page, []string{"주제별 인기유입검색어", "주제별 인기 유입 검색어"})
@@ -428,23 +446,18 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 	topicResults, _ := collectTrendSwiper(page, "주제별 인기유입검색어", 6, topicSwiperIndex, false)
 
 	// Collect demographic trends
-	log.Printf("[collectSearchInflowTrends] Starting demographic trends collection")
 	demoClicked, err := clickTrendMenu(page, []string{"성별, 연령별 인기유입검색어", "성별,연령별 인기유입검색어"})
 	if err != nil || !demoClicked {
-		log.Printf("[collectSearchInflowTrends] Failed to click demographic menu: err=%v, clicked=%v", err, demoClicked)
 		return nil, fmt.Errorf("성별, 연령별 인기유입검색어 메뉴를 찾지 못했습니다")
 	}
-	log.Printf("[collectSearchInflowTrends] Demographic menu clicked successfully")
 
 	waitForTrendMenuActive(page, []string{"성별, 연령별 인기유입검색어", "성별,연령별 인기유입검색어"})
 	
 	// Wait for page to update after menu click
 	page.WaitForTimeout(500)
-	log.Printf("[collectSearchInflowTrends] Waited for menu activation")
 
 	hasNoData, _ = hasTrendNoDataMessage(page)
 	if hasNoData {
-		log.Printf("[collectSearchInflowTrends] Demographic trends: no data message found")
 		return &struct {
 			Results []SearchInflowTrend `json:"results"`
 			Message string              `json:"message"`
@@ -461,31 +474,10 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 	
 	// Additional wait after scrolling
 	page.WaitForTimeout(500)
-	log.Printf("[collectSearchInflowTrends] Scrolled to demographic section")
-
-	// Debug: Check all swipers
-	swiperCount, _ := page.Evaluate(`() => {
-		return document.querySelectorAll(".u_ni_search_swiper").length;
-	}`, nil)
-	log.Printf("[collectSearchInflowTrends] Total swipers found: %v", swiperCount)
-	
-	// Debug: Check all titles
-	titlesResult, _ := page.Evaluate(`() => {
-		const titles = Array.from(document.querySelectorAll("h3.u_ni_trend_title"));
-		return titles.map(el => el.textContent?.trim() || "").filter(Boolean);
-	}`, nil)
-	log.Printf("[collectSearchInflowTrends] All titles found: %v", titlesResult)
 
 	demoSwiperIndex, err := findTrendSwiperIndex(page, "demographic")
 	if err != nil {
-		log.Printf("[collectSearchInflowTrends] Error finding demographic swiper index: %v", err)
-	}
-	log.Printf("[collectSearchInflowTrends] Demographic swiper index: %d", demoSwiperIndex)
-	
-	// Verify the swiper index by checking its first title
-	if demoSwiperIndex >= 0 {
-		firstTitle, _ := getFirstTrendTitle(page, demoSwiperIndex)
-		log.Printf("[collectSearchInflowTrends] First title in swiper[%d]: '%s'", demoSwiperIndex, firstTitle)
+		return nil, err
 	}
 	resetTrendSwiper(page, demoSwiperIndex)
 
@@ -496,36 +488,18 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 		})
 	}
 
-	log.Printf("[collectSearchInflowTrends] Calling collectTrendSwiper for demographic trends: maxCategories=0 (collect all), swiperIndex=%d", demoSwiperIndex)
 	demoResults, err := collectTrendSwiper(page, "성별,연령별 인기유입검색어", 0, demoSwiperIndex, false)
 	if err != nil {
-		log.Printf("[collectSearchInflowTrends] Error collecting demographic trends: %v", err)
-	} else {
-		log.Printf("[collectSearchInflowTrends] Demographic trends collected: %d results", len(demoResults))
-		for i, trend := range demoResults {
-			log.Printf("[collectSearchInflowTrends] Demographic result[%d]: category='%s', items=%d", 
-				i, trend.Category, len(trend.Items))
-		}
+		return nil, err
 	}
 
 	allResults := append(topicResults, demoResults...)
-	log.Printf("[collectSearchInflowTrends] Combined results: topic=%d, demographic=%d, total=%d", 
-		len(topicResults), len(demoResults), len(allResults))
 
 	// No filtering - include all demographic results
 	filteredResults := []SearchInflowTrend{}
-	demoCount := 0
 	for _, group := range allResults {
-		source := strings.ReplaceAll(group.Source, " ", "")
-		if source == "성별,연령별인기유입검색어" {
-			demoCount++
-			log.Printf("[collectSearchInflowTrends] Demographic group[%d]: category='%s', items=%d", 
-				demoCount, group.Category, len(group.Items))
-		}
 		filteredResults = append(filteredResults, group)
 	}
-	log.Printf("[collectSearchInflowTrends] Filtered results: total=%d (demographic count=%d)", 
-		len(filteredResults), demoCount)
 
 	hasItems := false
 	for _, group := range filteredResults {
@@ -550,7 +524,7 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 		}
 	}
 
-	return &struct {
+	result := &struct {
 		Results []SearchInflowTrend `json:"results"`
 		Message string              `json:"message"`
 		NoData  bool                `json:"noData"`
@@ -558,14 +532,19 @@ func collectSearchInflowTrends(page playwright.Page, onProgress func(Progress)) 
 		Results: filteredResults,
 		Message: "",
 		NoData:  false,
-	}, nil
+	}
+	resultJSON, _ := json.MarshalIndent(result, "", "  ")
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 검색 유입 트렌드 수집 완료\n수집 데이터: %s\n", page.URL(), string(resultJSON))
+	return result, nil
 }
 
 // collectMainInflow collects main inflow content
 func collectMainInflow(page playwright.Page) ([]MainInflowContent, error) {
+	currentURL := page.URL()
 	if err := clickTrendTab(page, "메인 유입 트렌드"); err != nil {
 		return nil, fmt.Errorf("메인 유입 트렌드 탭 클릭 실패: %w", err)
 	}
+	log.Printf("[트렌드 데이터 검색] [Playwright 크롤링]\n페이지: %s\n액션: 메인 유입 트렌드 탭 클릭\n", currentURL)
 
 	page.WaitForSelector("ul.u_ni_realtime_list", playwright.PageWaitForSelectorOptions{
 		Timeout: playwright.Float(10000),

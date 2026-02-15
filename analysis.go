@@ -113,7 +113,7 @@ func hydrateSearchVolumes(config Config, items []RelatedDetail) ([]RelatedDetail
 
 	chunks := chunkArray(keywords, searchAdChunkSize)
 	for _, chunk := range chunks {
-		keywordList, err := fetchSearchAdKeywords(config, chunk)
+		keywordList, err := fetchSearchAdKeywords(config, chunk, "단일 키워드 검색")
 		if err != nil {
 			continue
 		}
@@ -155,55 +155,36 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 	}
 
 	searchTarget := target
-	log.Printf("=== analyzeKeyword: 메인 키워드 SearchAd API 호출 시작 ===\nKeyword: %s\n", searchTarget)
-	keywordList, err := fetchSearchAdKeywords(config, []string{searchTarget})
+	keywordList, err := fetchSearchAdKeywords(config, []string{searchTarget}, "단일 키워드 검색")
 	if err != nil {
-		log.Printf("=== analyzeKeyword: 메인 키워드 SearchAd API 호출 실패 ===\nKeyword: %s\nError: %v\n", searchTarget, err)
 		return nil, err
-	}
-	log.Printf("=== analyzeKeyword: 메인 키워드 SearchAd API 호출 완료 ===\nKeyword: %s\n결과 개수: %d\n", searchTarget, len(keywordList))
-	if len(keywordList) > 0 {
-		for i, item := range keywordList {
-			log.Printf("=== analyzeKeyword: 메인 키워드 결과[%d] ===\nRelKeyword: %s\nCompIdx: %v\n", i, getKeywordLabel(item), item.CompIdx)
-		}
 	}
 
 	// 원본처럼 정확히 일치하는 것을 찾고, 없으면 첫 번째 항목 사용
 	var match SearchAdKeywordItem
 	if len(keywordList) > 0 {
-		log.Printf("=== analyzeKeyword: keywordList에서 match 찾기 시작 ===\nKeyword: %s\nkeywordList 개수: %d\n", searchTarget, len(keywordList))
 		// 정확히 일치하는 것을 찾음
 		for _, item := range keywordList {
 			label := getKeywordLabel(item)
-			log.Printf("=== analyzeKeyword: 비교 중 ===\nlabel: '%s'\nsearchTarget: '%s'\n일치: %v\n", label, searchTarget, label == searchTarget)
 			if label == searchTarget {
 				match = item
-				log.Printf("=== analyzeKeyword: 정확히 일치하는 항목 찾음 ===\nlabel: '%s'\nCompIdx: %v\n", label, item.CompIdx)
 				break
 			}
 		}
 		// 정확히 일치하는 것이 없으면 첫 번째 항목 사용 (원본과 동일)
 		if match.Keyword == "" && match.RelKeyword == "" {
 			match = keywordList[0]
-			log.Printf("=== analyzeKeyword: 첫 번째 항목 사용 ===\nlabel: '%s'\nCompIdx: %v\n", getKeywordLabel(match), match.CompIdx)
 		}
-	} else {
-		log.Printf("=== analyzeKeyword: keywordList가 비어있음 ===\nKeyword: %s\n", searchTarget)
 	}
-
-	log.Printf("=== analyzeKeyword: 최종 match 객체 ===\nKeyword: %s\nmatch.Keyword: '%s'\nmatch.RelKeyword: '%s'\nmatch.CompIdx: %v\n", 
-		searchTarget, match.Keyword, match.RelKeyword, match.CompIdx)
 
 	searchPc := int(toNumber(match.MonthlyPcQcCnt))
 	searchMobile := int(toNumber(match.MonthlyMobileQcCnt))
 	hasSearchVolume := searchPc > 0 || searchMobile > 0
-	log.Printf("=== analyzeKeyword: 검색량 확인 ===\nKeyword: %s\nsearchPc: %d\nsearchMobile: %d\nhasSearchVolume: %v\n", 
-		searchTarget, searchPc, searchMobile, hasSearchVolume)
 
 	if !hasSearchVolume && strings.Contains(searchTarget, " ") {
 		compact := strings.ReplaceAll(searchTarget, " ", "")
 		if compact != "" && compact != searchTarget {
-			fallbackList, err := fetchSearchAdKeywords(config, []string{compact})
+			fallbackList, err := fetchSearchAdKeywords(config, []string{compact}, "단일 키워드 검색")
 			if err == nil && len(fallbackList) > 0 {
 				searchTarget = compact
 				keywordList = fallbackList
@@ -272,7 +253,7 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 	}
 
 	if len(relatedBase) < relatedKeywordLimit {
-		suggestions, err := fetchNaverAutocomplete(target, relatedKeywordLimit)
+		suggestions, err := fetchNaverAutocomplete(target, relatedKeywordLimit, "단일 키워드 검색")
 		if err == nil {
 			existing := make(map[string]bool)
 			existingNormalized := make(map[string]bool)
@@ -303,7 +284,7 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 			}
 
 			if len(missing) > 0 {
-				searchadFallback, err := fetchSearchAdKeywords(config, missing)
+				searchadFallback, err := fetchSearchAdKeywords(config, missing, "단일 키워드 검색")
 				if err == nil {
 					byLabel := make(map[string]RelatedDetail)
 					for _, item := range searchadFallback {
@@ -370,7 +351,7 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 
 	relatedDetails := []RelatedDetail{}
 	for _, item := range relatedBase {
-		stats, err := fetchBlogCount(config, item.Keyword)
+		stats, err := fetchBlogCount(config, item.Keyword, "단일 키워드 검색")
 		if err != nil {
 			stats = map[string]int{"total": 0}
 		}
@@ -389,7 +370,7 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 	}
 
 	docCount := 0
-	stats, err := fetchBlogCount(config, target)
+	stats, err := fetchBlogCount(config, target, "단일 키워드 검색")
 	if err == nil {
 		docCount = stats["total"]
 	}
@@ -482,9 +463,6 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 	var competition interface{} = nil
 	if val, ok := searchAdMetrics["competition"]; ok && val != nil {
 		competition = val
-		log.Printf("=== analyzeKeyword: competition ===\nKeyword: %s\n값: %v (타입: %T)\n", target, competition, competition)
-	} else {
-		log.Printf("=== analyzeKeyword: competition 없음 ===\nKeyword: %s\nsearchAdMetrics[\"competition\"] 존재: %v\n", target, ok)
 	}
 
 	result := &KeywordAnalysisResult{
@@ -502,10 +480,6 @@ func analyzeKeyword(config Config, keyword string, onProgress func(Progress)) (*
 		Score:           scoring.Score,
 	}
 
-	// 최종 결과 로그 출력
-	resultJSON, _ := json.MarshalIndent(result, "", "  ")
-	log.Printf("=== analyzeKeyword 최종 결과 ===\nKeyword: %s\n%s\n", target, string(resultJSON))
-
 	return result, nil
 }
 
@@ -514,7 +488,7 @@ func autoExtract(config Config, seeds []string, onProgress func(Progress)) ([]Au
 		return []AutoExtractResult{}, nil
 	}
 
-	keywordList, err := fetchSearchAdKeywords(config, seeds)
+	keywordList, err := fetchSearchAdKeywords(config, seeds, "황금 키워드 검색")
 	if err != nil {
 		return nil, err
 	}
@@ -651,7 +625,7 @@ func autoExtract(config Config, seeds []string, onProgress func(Progress)) ([]Au
 	// Fetch CPC stats and estimates
 	cpcStatsMap := make(map[string]KeywordStats)
 	if len(cpcKeywords) > 0 {
-		stats, err := fetchSearchAdKeywordStats(config, cpcKeywords)
+		stats, err := fetchSearchAdKeywordStats(config, cpcKeywords, "황금 키워드 검색")
 		if err == nil {
 			cpcStatsMap = stats
 		}
@@ -664,8 +638,8 @@ func autoExtract(config Config, seeds []string, onProgress func(Progress)) ([]Au
 		for keyword, bid := range keywordBidMap {
 			bidMap[keyword] = bid
 		}
-		pcEst, _ := fetchSearchAdCpcEstimates(config, cpcKeywords, 70, "PC", bidMap)
-		mobileEst, _ := fetchSearchAdCpcEstimates(config, cpcKeywords, 70, "MOBILE", bidMap)
+		pcEst, _ := fetchSearchAdCpcEstimates(config, cpcKeywords, 70, "PC", bidMap, "황금 키워드 검색")
+		mobileEst, _ := fetchSearchAdCpcEstimates(config, cpcKeywords, 70, "MOBILE", bidMap, "황금 키워드 검색")
 		cpcMapPc = pcEst
 		cpcMapMobile = mobileEst
 	}
@@ -682,7 +656,7 @@ func autoExtract(config Config, seeds []string, onProgress func(Progress)) ([]Au
 		searchAdMetrics := getSearchAdMonthlyMetrics(entry.Item, float64(searchPc), float64(searchMobile))
 
 		docCount := 0
-		stats, err := fetchBlogCount(config, keyword)
+		stats, err := fetchBlogCount(config, keyword, "황금 키워드 검색")
 		if err == nil {
 			docCount = stats["total"]
 		}
